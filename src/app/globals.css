@@ -927,3 +927,20 @@ form > button {
     gap: 5px;
   }
 }
+
+.mutation-toolbar, .row-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 12px 0; }
+.row-actions .button { font-size: 10px; }
+.mutation-dialog { width: min(660px, calc(100% - 24px)); max-height: 90dvh; margin: auto; padding: 22px; border: 1px solid var(--border); border-radius: 12px; color: var(--foreground); box-shadow: 0 16px 60px #25263830; overflow-y: auto; }
+.mutation-dialog::backdrop { background: #25263860; }
+.mutation-dialog .section-head { margin-top: 0; }
+.mutation-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; border: 0; padding: 0; margin: 16px 0; min-width: 0; }
+.mutation-fields label { display: flex; flex-direction: column; gap: 5px; font-size: 11px; color: #737789; min-width: 0; }
+.mutation-fields .wide { grid-column: 1 / -1; }
+.mutation-fields input, .mutation-fields select, .mutation-fields textarea { width: 100%; }
+.mutation-fields textarea { font: inherit; padding: 8px 10px; border: 1px solid #dfe2ea; border-radius: 6px; resize: vertical; }
+.mutation-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+button:disabled, fieldset:disabled { opacity: .6; cursor: wait; }
+.mutation-success { background: #eaf6ef; color: #428a72; padding: 10px 14px; border-radius: 7px; margin-bottom: 16px; display: flex; justify-content: space-between; }
+.mutation-success button { border: 0; background: transparent; }
+.confirmation-text { margin: 10px 0; }
+@media (max-width: 760px) { .mutation-fields { grid-template-columns: 1fr; } .mutation-dialog { padding: 16px; } .mutation-toolbar .button { flex: 1; } }

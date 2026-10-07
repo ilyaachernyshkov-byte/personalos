@@ -1,3 +1,4 @@
+import { MutationProvider, CreateButton } from "@/features/mutations";
 import { getSnapshot } from "@/repositories";
 import { today, displayDate, shiftDate, minutes } from "@/lib/dates";
 import { aggregate, activeProject, sortProjects } from "@/lib/analytics";
@@ -37,12 +38,15 @@ export default async function Dashboard() {
       })),
   ];
   return (
-    <>
+    <MutationProvider data={d} date={today()}>
       <PageHead
         title="Дашборд"
         subtitle={`Обзор проектов и рабочего дня · ${displayDate(date)}`}
         mode={mode}
       />
+      <div className="mutation-toolbar">
+        <CreateButton entity="activity" label="+ Записать факт" />
+      </div>
       <Kpis
         items={[
           ["Активные проекты", projects.length],
@@ -100,6 +104,6 @@ export default async function Dashboard() {
         ))}
         {!attention.length && <Empty text="Всё под контролем" />}
       </section>
-    </>
+    </MutationProvider>
   );
 }

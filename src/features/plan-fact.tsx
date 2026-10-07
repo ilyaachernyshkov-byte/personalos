@@ -1,4 +1,5 @@
 "use client";
+import { CreateButton, EditButton, PlanActions } from "@/features/mutations";
 import { useState } from "react";
 import type { Snapshot } from "@/types/domain";
 import { shiftDate, isIsoDate, minutes } from "@/lib/dates";
@@ -44,6 +45,18 @@ export function PlanFact({ data, today }: { data: Snapshot; today: string }) {
           →
         </Button>
       </div>
+      <div className="mutation-toolbar">
+        <CreateButton
+          entity="plan"
+          initial={{ date }}
+          label="+ Добавить в план"
+        />
+        <CreateButton
+          entity="activity"
+          initial={{ date }}
+          label="+ Записать факт"
+        />
+      </div>
       <Kpis
         items={[
           ["План", minutes(a.plan)],
@@ -63,9 +76,8 @@ export function PlanFact({ data, today }: { data: Snapshot; today: string }) {
           </div>
           <div className="panel schedule">
             {plans.map((p) => (
-              <button
+              <article
                 key={p.id}
-                onClick={() => setSelected(selected === p.id ? "" : p.id)}
                 className={`schedule-item ${selected === p.id ? "linked" : ""}`}
               >
                 <div className="schedule-time">
@@ -73,7 +85,14 @@ export function PlanFact({ data, today }: { data: Snapshot; today: string }) {
                   <small>{p.end}</small>
                 </div>
                 <div>
-                  <h3>{p.name}</h3>
+                  <h3>
+                    <button
+                      className="text-button"
+                      onClick={() => setSelected(selected === p.id ? "" : p.id)}
+                    >
+                      {p.name}
+                    </button>
+                  </h3>
                   <p>{p.project || "Без проекта"}</p>
                   <div className="chips">
                     <Badge>{p.type}</Badge>
@@ -84,8 +103,9 @@ export function PlanFact({ data, today }: { data: Snapshot; today: string }) {
                     Связанных записей Факта:{" "}
                     {activities.filter((a) => a.planId === p.id).length}
                   </small>
+                  <PlanActions plan={p} />
                 </div>
-              </button>
+              </article>
             ))}
             {!plans.length && (
               <Empty text="На этот день ничего не запланировано" />
@@ -128,6 +148,7 @@ export function PlanFact({ data, today }: { data: Snapshot; today: string }) {
                     </button>
                   )}
                   <p className="result">{x.result || "Результат не указан"}</p>
+                  <EditButton entity="activity" row={x} />
                 </div>
               </article>
             ))}

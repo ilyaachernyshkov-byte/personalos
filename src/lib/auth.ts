@@ -4,11 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 const cookieName = "personalos_session";
 export function bypass() {
-  return (
-    !process.env.APP_PASSWORD &&
-    (process.env.NODE_ENV !== "production" ||
-      process.env.VERCEL_ENV === "preview")
-  );
+  return !process.env.APP_PASSWORD || !process.env.SESSION_SECRET;
 }
 export function configured() {
   return Boolean(

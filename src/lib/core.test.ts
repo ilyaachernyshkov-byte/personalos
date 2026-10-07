@@ -100,3 +100,12 @@ describe("analytics", () => {
     expect(aggregate(d.plans, d.activities, date, date).unplanned).toBe(30);
   });
 });
+
+it("excludes Phase 2 completed and cancelled projects from active totals", async () => {
+  const { activeProject } = await import("./analytics");
+  const { demoRepository } = await import("@/repositories/demo");
+  const project = (await demoRepository.read()).projects[0];
+  expect(activeProject({...project,status:"Завершено"})).toBe(false);
+  expect(activeProject({...project,status:"Отменено"})).toBe(false);
+  expect(activeProject({...project,status:"В работе"})).toBe(true);
+});

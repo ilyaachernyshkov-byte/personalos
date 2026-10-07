@@ -1,16 +1,24 @@
+import {
+  MutationProvider,
+  CreateButton,
+  ProcessActions,
+} from "@/features/mutations";
 import { getSnapshot } from "@/repositories";
 import { PageHead } from "@/components/page-head";
 import { Badge, Empty } from "@/components/shared";
-import { displayDate } from "@/lib/dates";
+import { displayDate, today } from "@/lib/dates";
 export default async function Processes() {
   const { data, mode } = await getSnapshot();
   return (
-    <>
+    <MutationProvider data={data} date={today()}>
       <PageHead
         title="Процессы"
         subtitle="Шаблоны регулярной работы — без бесконечного списка задач"
         mode={mode}
       />
+      <div className="mutation-toolbar">
+        <CreateButton entity="process" label="+ Новый процесс" />
+      </div>
       <div className="panel table-wrap">
         <table>
           <thead>
@@ -25,6 +33,7 @@ export default async function Processes() {
                 "Следующее",
                 "Последнее",
                 "Активен",
+                "Действия",
               ].map((x) => (
                 <th key={x}>{x}</th>
               ))}
@@ -49,6 +58,9 @@ export default async function Processes() {
                     {p.active ? "Да" : "Нет"}
                   </Badge>
                 </td>
+                <td>
+                  <ProcessActions process={p} />
+                </td>
               </tr>
             ))}
           </tbody>
@@ -57,6 +69,6 @@ export default async function Processes() {
           <Empty text="Регулярных процессов пока нет" />
         )}
       </div>
-    </>
+    </MutationProvider>
   );
 }

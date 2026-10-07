@@ -2,13 +2,13 @@
 Single-user Russian web app for projects, tasks, recurring processes, daily Plan and actual time log.
 
 ## Architecture
-Next.js App Router, strict TypeScript, npm, Tailwind, shadcn/ui, Recharts. Server components authorize before reading. UI consumes domain objects from PersonalOsRepository. Google Sheets is the source of truth; demo fixtures are only development/preview fallback. Batch-read six ranges once per request; never perform a request per card. Credentials live only in ENV.
+Next.js App Router, strict TypeScript, npm, Tailwind, shadcn/ui, Recharts. Server components authorize before reading. UI consumes domain objects from PersonalOsRepository. Google Sheets is the source of truth; demo fixtures are only development/preview fallback. Apps Script is the primary backend; server-side mutations only. Full deployment source: apps-script/Code.gs. Batch-read six ranges once per request; never perform a request per card. Credentials live only in ENV.
 
 ## Invariants
 - Task and Activity are different entities. Actual time comes only from Факт.
 - An Activity is planned only when plan_id is present. Never retrospectively attach unplanned work automatically.
 - Project progress comes from checkpoint milestones / Sheets formulas, never from completed task count.
-- Preserve existing sheet names. Preserve formula columns: Проекты F/K/L/M, План L/M.
+- Preserve existing sheet names. Preserve formula columns: Проекты F/K/L/M, План L/M, Факт M.
 - Future insert: read ID column, find first empty ID row, allocate maximum numeric suffix + 1 (minimum three digits). Do not append based on formula-filled sheet extent.
 - No writes in Phase 1. Future CRUD must update only explicitly writable cells, retain formula cells, serialize allocation and reread IDs; Sheets provides no transactional uniqueness guarantee.
 - Do not add Supabase, another database, microservices, AI, voice, Calendar integration, Bitrix or multi-user auth in Phase 1.
@@ -16,7 +16,7 @@ Next.js App Router, strict TypeScript, npm, Tailwind, shadcn/ui, Recharts. Serve
 
 ## Validation
 npm run lint; npm run typecheck; npm test; npm run build.
-Stop after Phase 1. Further phases require user instruction.
+Phase 2 code is authorized. Stop before Phase 3. Live Phase 2 completion requires real create/update verification after manual Apps Script deployment.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

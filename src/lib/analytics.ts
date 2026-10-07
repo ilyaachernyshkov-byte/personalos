@@ -44,7 +44,7 @@ export function aggregate(
   };
 }
 export function activeProject(p: Project) {
-  return !["Готово", "Завершён", "Завершен", "Отменён", "Архив"].includes(
+  return !["Готово", "Завершено", "Завершён", "Завершен", "Отменено", "Отменён", "Архив"].includes(
     p.status,
   );
 }
