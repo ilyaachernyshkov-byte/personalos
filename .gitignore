@@ -1,0 +1,12 @@
+node_modules/
+.next/
+out/
+coverage/
+.env*
+!.env.example
+credentials.json
+*private*key*.json
+work/
+test-results/
+playwright-report/
+*.tsbuildinfo
