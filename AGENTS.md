@@ -16,7 +16,7 @@ Next.js App Router, strict TypeScript, npm, Tailwind, shadcn/ui, Recharts. Serve
 
 ## Validation
 npm run lint; npm run typecheck; npm test; npm run build.
-Phase 2 code is authorized. Stop before Phase 3. Live Phase 2 completion requires real create/update verification after manual Apps Script deployment.
+Phase 3 code is authorized. Stop before Phase 4. Calendar is read only: explicit server ENV selection, manual sync, dedup by calendar_id + calendar_event_id; Calendar sync writes only Plan and never Fact. Live Phase 2 completion requires real create/update verification after manual Apps Script deployment.
 
 <!-- BEGIN:nextjs-agent-rules -->
 

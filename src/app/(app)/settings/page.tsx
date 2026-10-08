@@ -1,3 +1,5 @@
+import { CalendarSettings } from "@/features/calendar";
+import { calendarConfig, calendarLastSuccess } from "@/repositories/calendar";
 import { PageHead } from "@/components/page-head";
 import { configured, bypass } from "@/lib/auth";
 import { requireAuth } from "@/lib/auth";
@@ -21,6 +23,14 @@ export default async function Settings() {
     connected = apiConfigured;
   } catch {
     /* Render connection error even when snapshot fails. */
+  }
+  let calendar = { configured: false, count: 0, lastSuccess: null as string | null, error: null as string | null };
+  try {
+    const config = calendarConfig();
+    calendar = { ...calendar, configured: config.configured, count: config.calendarIds.length };
+    if (config.configured) calendar.lastSuccess = await calendarLastSuccess();
+  } catch (error) {
+    calendar.error = error instanceof Error ? error.message : "Calendar недоступен";
   }
   return (
     <>
@@ -62,6 +72,7 @@ export default async function Settings() {
           </div>
         </dl>
       </section>
+      <CalendarSettings {...calendar} />
     </>
   );
 }

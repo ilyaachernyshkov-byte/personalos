@@ -1,4 +1,4 @@
-// PERSONAL OS PHASE 2. Replace the complete deployed Code.gs with this file.
+// PERSONAL OS PHASE 3. Replace the complete deployed Code.gs with this file.
 // Script Properties: API_SECRET, SPREADSHEET_ID. Never place secrets here.
 var CONFIG = {
   "project": {
@@ -290,15 +290,16 @@ function doPost(e) {
     var request;
     try { request = JSON.parse(e.postData.contents); } catch (_) { fail('INVALID_JSON', 'Ожидается JSON'); }
     if (!request || typeof request !== 'object' || request.secret !== secret) fail('UNAUTHORIZED', 'Доступ запрещён');
-    if (['snapshot', 'read', 'create', 'update'].indexOf(request.action) < 0) fail('INVALID_ACTION', 'Неизвестное действие');
+    if (['snapshot', 'read', 'create', 'update', 'calendarSync', 'calendarStatus'].indexOf(request.action) < 0) fail('INVALID_ACTION', 'Неизвестное действие');
     diagnosticStage = "open-spreadsheet";
     var book = SpreadsheetApp.openById(spreadsheetId);
     if (request.action === 'snapshot' || request.action === 'read') return jsonResponse({ok: true, apiVersion: 2, data: snapshot(book)});
+    if (request.action === 'calendarStatus') return jsonResponse({ok: true, apiVersion: 2, lastSuccess: props.getProperty('CALENDAR_LAST_SUCCESS') || null});
     diagnosticStage = "write-lock";
     var lock = LockService.getScriptLock();
     if (!lock.tryLock(20000)) fail('BUSY', 'Запись занята. Попробуйте позже');
     try {
-      return jsonResponse(mutate(book, request));
+      return jsonResponse(request.action === 'calendarSync' ? syncCalendar(book, request) : mutate(book, request));
     } finally { lock.releaseLock(); }
   } catch (error) {
     // Log internal exceptions only in Apps Script Executions, never in API responses.
@@ -531,4 +532,159 @@ function mutate(book, request) {
   if (create) sheet.getRange(row, 1).setValue(id);
   SpreadsheetApp.flush();
   return {ok: true, apiVersion: 2, id: id};
+}
+
+// Calendar API calls are GET only. No calendar writes and no Activity mutations.
+function calendarGet(path, params, missingAllowed) {
+  var query = Object.keys(params || {}).map(function(key) {
+    return encodeURIComponent(key) + '=' + encodeURIComponent(params[key]);
+  }).join('&');
+  var response = UrlFetchApp.fetch('https://www.googleapis.com/calendar/v3/calendars/' + path + (query ? '?' + query : ''), {
+    method: 'get', headers: {Authorization: 'Bearer ' + ScriptApp.getOAuthToken()}, muteHttpExceptions: true
+  });
+  var code = response.getResponseCode();
+  if (missingAllowed && (code === 404 || code === 410)) return {status: 'cancelled'};
+  if (code !== 200) fail('CALENDAR_ACCESS', 'Calendar API недоступен (' + code + '). Проверьте Calendar API, readonly-разрешение и доступ владельца к выбранным календарям. План мог частично сохраниться; повтор безопасен.');
+  try { return JSON.parse(response.getContentText()); } catch (_) { fail('CALENDAR_ACCESS', 'Некорректный ответ Calendar API'); }
+}
+function calendarMapping(event, calendarId, timezone) {
+  if (!event.id) fail('CALENDAR_DATA', 'Calendar Event без instance ID');
+  if (event.status === 'cancelled') return {calendarId: calendarId, calendarEventId: event.id, status: 'Отменено'};
+  if (!event.start || !event.end) fail('CALENDAR_DATA', 'Calendar Event без дат');
+  var allDay = Boolean(event.start.date), start, end, date;
+  if (allDay) {
+    date = event.start.date;
+    if (!isDate(date) || !isDate(event.end.date) || event.end.date <= date) fail('CALENDAR_DATA', 'Некорректная дата Calendar Event');
+  } else {
+    // Require an explicit RFC3339 offset; never interpret event times in host timezone.
+    if (!/(?:[zZ]|[+-]\d\d:\d\d)$/.test(event.start.dateTime || '') || !/(?:[zZ]|[+-]\d\d:\d\d)$/.test(event.end.dateTime || '')) fail('CALENDAR_DATA', 'Calendar time требует timezone offset');
+    start = new Date(event.start.dateTime); end = new Date(event.end.dateTime);
+    if (isNaN(start.getTime()) || isNaN(end.getTime()) || end < start) fail('CALENDAR_DATA', 'Некорректное время Calendar Event');
+    date = Utilities.formatDate(start, timezone, 'yyyy-MM-dd');
+  }
+  return {
+    date: date, start: allDay ? '' : Utilities.formatDate(start, timezone, 'HH:mm'),
+    end: allDay ? '' : Utilities.formatDate(end, timezone, 'HH:mm'),
+    minutes: allDay ? 0 : Math.round((end - start) / 60000),
+    name: String(event.summary || 'Без названия').slice(0, 10000), status: 'Запланировано',
+    calendarId: calendarId, calendarEventId: event.id, source: 'Импорт'
+  };
+}
+function calendarAllowed(cell) {
+  var rule = cell.getDataValidation();
+  if (!rule) return null;
+  var kind = String(rule.getCriteriaType());
+  if (kind === 'VALUE_IN_LIST') return rule.getCriteriaValues()[0].map(String);
+  if (kind === 'VALUE_IN_RANGE') return rule.getCriteriaValues()[0].getDisplayValues().reduce(function(all, row) {return all.concat(row.map(String));}, []);
+  fail('VALIDATION', 'Неподдерживаемая validation Calendar-поля. Проверьте dropdown План');
+}
+function calendarChoice(cell, candidates, field) {
+  var allowed = calendarAllowed(cell);
+  // Use established Phase 2 values only, and inspect even allow-invalid dropdowns.
+  var choice = candidates.find(function(value) {return !allowed || allowed.indexOf(value) >= 0;});
+  if (!choice) fail('VALIDATION', 'В План нет допустимого значения ' + field + ': ' + candidates.join(', '));
+  return choice;
+}
+function syncCalendar(book, request) {
+  diagnosticStage = 'calendar:configuration';
+  var ids = request.calendarIds;
+  if (!Array.isArray(ids) || !ids.length || ids.length > 20 || ids.some(function(id) {return typeof id !== 'string' || !id.trim() || id.length > 500;}) || new Set(ids).size !== ids.length)
+    fail('VALIDATION', 'Укажите 1–20 уникальных выбранных calendar IDs');
+  var past = request.pastDays, future = request.futureDays;
+  if (!Number.isInteger(past) || past < 0 || past > 90 || !Number.isInteger(future) || future < 1 || future > 180) fail('VALIDATION', 'Окно Calendar: past 0–90, future 1–180 дней');
+  var timezone = getSafeTimeZone(book), now = new Date();
+  var min = new Date(now.getTime() - past * 86400000).toISOString(), max = new Date(now.getTime() + future * 86400000).toISOString();
+  var sheet = sheetFor(book, 'plan'), config = CONFIG.plan;
+  var rows = readRows(sheet, config.fields.length);
+  var displays = rows.length ? sheet.getRange(2, 1, rows.length, config.fields.length).getDisplayValues() : [];
+  var index = {}, existing = [];
+  rows.forEach(function(row, i) {
+    if (!String(row[0]).trim() || !row[14] || !row[15]) return;
+    var key = JSON.stringify([String(row[14]), String(row[15])]);
+    if (index[key]) fail('VALIDATION', 'Дубли calendar_id + calendar_event_id в План');
+    var record = {row: i + 2, data: rowData('plan', row, timezone, displays[i])};
+    index[key] = record; existing.push(record);
+  });
+  if (existing.filter(function(record) {return ids.indexOf(record.data.calendarId) >= 0;}).length > 1000) fail('CALENDAR_DATA', 'Превышен лимит 1000 импортированных Plan для выбранных календарей');
+  // Complete every read before writes, so access/pagination failure cannot imply deletion.
+  var events = {}, count = 0;
+  ids.forEach(function(id) {
+    diagnosticStage = 'calendar:read';
+    var token, pages = {}, pageCount = 0;
+    do {
+      if (++pageCount > 100 || (token && pages[token])) fail('CALENDAR_DATA', 'Превышен лимит страниц Calendar; уменьшите окно');
+      if (token) pages[token] = true;
+      var params = {timeMin: min, timeMax: max, singleEvents: true, showDeleted: true, maxResults: 2500, timeZone: timezone};
+      if (token) params.pageToken = token;
+      var page = calendarGet(encodeURIComponent(id) + '/events', params, false);
+      if (!Array.isArray(page.items)) fail('CALENDAR_DATA', 'Calendar API не вернул events');
+      page.items.forEach(function(event) {
+        if (++count > 10000) fail('CALENDAR_DATA', 'Слишком много событий; уменьшите окно');
+        var mapped = calendarMapping(event, id, timezone);
+        events[JSON.stringify([id, event.id])] = mapped;
+      });
+      token = page.nextPageToken;
+    } while (token);
+  });
+  // Existing imported rows are individually checked, including moved/deleted instances
+  // outside this window. Never cancel by absence from a bounded list.
+  existing.forEach(function(record) {
+    var data = record.data, key = JSON.stringify([String(data.calendarId), String(data.calendarEventId)]);
+    if (ids.indexOf(data.calendarId) < 0 || events[key]) return;
+    var event = calendarGet(encodeURIComponent(data.calendarId) + '/events/' + encodeURIComponent(data.calendarEventId), {}, true);
+    if (!event.id) event.id = data.calendarEventId;
+    events[key] = calendarMapping(event, data.calendarId, timezone);
+  });
+  var result = {created: 0, updated: 0, canceled: 0, skipped: 0};
+  var planIds = rows.map(function(row) {return row[0];});
+  Object.keys(events).forEach(function(key) {
+    diagnosticStage = 'calendar:write';
+    var data = events[key], record = index[key], cancelled = data.status === 'Отменено';
+    if (cancelled && !record) {result.skipped++; return;}
+    var create = !record, row = record ? record.row : firstEmptyIdRow(planIds);
+    if (row > sheet.getMaxRows()) fail('NO_FREE_ROW', 'Добавьте свободные строки с формулами в План; повтор sync безопасен');
+    data.status = calendarChoice(sheet.getRange(row, 11), [cancelled ? 'Отменено' : 'Запланировано'], 'Статус');
+    if (!cancelled) data.source = calendarChoice(sheet.getRange(row, 14), ['Импорт'], 'Источник');
+    if (create) {
+      data.type = calendarChoice(sheet.getRange(row, 6), ['Встреча', 'Другое'], 'Тип');
+      config.fields.forEach(function(field) {
+        if (field && field !== 'id' && !(field in data)) data[field] = '';
+      });
+    }
+    // Calendar owns no project/sourceId/notes/type on resync. Only cancellation
+    // status changes for tombstones; previous event details and IDs are retained.
+    var changed = create || Object.keys(data).some(function(field) {return String(data[field]) !== String(record.data[field]);});
+    if (!changed) {result.skipped++; return;}
+    var timestamp = Utilities.formatDate(now, timezone, 'yyyy-MM-dd HH:mm:ss');
+    data.updatedAt = timestamp;
+    if (create) data.createdAt = timestamp;
+    var writes = [];
+    Object.keys(data).forEach(function(field) {
+      var col = config.fields.indexOf(field) + 1;
+      if (col < 1) fail('VALIDATION', 'Недопустимое Calendar поле');
+      var cell = sheet.getRange(row, col);
+      if (cell.getFormula()) fail('FORMULA_PROTECTED', 'Формула в Calendar-owned колонке ' + col);
+      writes.push({cell: cell, field: field, value: validatedCellValue(cell, 'plan', field, data[field])});
+    });
+    var id = create ? nextId(planIds, 'PLAN') : record.data.id;
+    if (create && sheet.getRange(row, 1).getFormula()) fail('FORMULA_PROTECTED', 'Формула в plan_id');
+    writes.forEach(function(write) {
+      write.cell.setValue(write.value);
+      var kind = fieldKind('plan', write.field);
+      if (kind === 'date') write.cell.setNumberFormat('dd.MM.yyyy');
+      if (kind === 'time') write.cell.setNumberFormat('HH:mm');
+    });
+    if (create) {sheet.getRange(row, 1).setValue(id); planIds[row - 2] = id; result.created++;}
+    else if (cancelled) result.canceled++;
+    else result.updated++;
+  });
+  SpreadsheetApp.flush();
+  var lastSuccess = now.toISOString();
+  PropertiesService.getScriptProperties().setProperty('CALENDAR_LAST_SUCCESS', lastSuccess);
+  return {ok: true, apiVersion: 2, result: result, lastSuccess: lastSuccess};
+}
+
+// Run once from the Apps Script editor after applying the readonly manifest.
+function authorizeCalendarReadOnly() {
+  ScriptApp.getOAuthToken();
 }

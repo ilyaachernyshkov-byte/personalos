@@ -46,4 +46,8 @@ Signed httpOnly cookie: HMAC-SHA256, 7 дней, SameSite=Lax, Secure в product
 
 ## PHASE 2
 
-CRUD/forms и запись Факта реализованы через server-side Apps Script mutations. Инструкция ручного обновления существующего deployment: [docs/PHASE_2.md](docs/PHASE_2.md). Полный backend: [apps-script/Code.gs](apps-script/Code.gs). Без APP_PASSWORD или SESSION_SECRET login gate не блокирует приложение. Live create/update требуют нового deployment и отдельной проверки. PHASE 3 не начата.
+CRUD/forms и запись Факта реализованы через server-side Apps Script mutations. Инструкция ручного обновления существующего deployment: [docs/PHASE_2.md](docs/PHASE_2.md). Полный backend: [apps-script/Code.gs](apps-script/Code.gs). Без APP_PASSWORD или SESSION_SECRET login gate не блокирует приложение. Live create/update требуют нового deployment и отдельной проверки. PHASE 3: код ручной readonly Calendar → План синхронизации подготовлен; live verification ожидается.
+
+## PHASE 3
+
+Выбранные через server ENV Google Calendars импортируются вручную в План через существующий Apps Script backend. Calendar sync никогда не создаёт Факт. Настройка readonly permissions, ENV, mapping и live checklist: [docs/PHASE_3.md](docs/PHASE_3.md). Полные deployment-файлы: [Code.gs](apps-script/Code.gs) и [appsscript.json](apps-script/appsscript.json). PHASE 4 не начата.
