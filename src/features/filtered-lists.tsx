@@ -1,4 +1,5 @@
 "use client";
+import { TaskActions } from "@/features/mutations";
 import { useState } from "react";
 import type { Project, Task } from "@/types/domain";
 import { ProjectCard, Empty, Badge } from "@/components/shared";
@@ -131,6 +132,7 @@ export function TasksList({ tasks, date }: { tasks: Task[]; date: string }) {
                 "Плановая дата",
                 "Дедлайн",
                 "Ответственный",
+                "Действия",
               ].map((x) => (
                 <th key={x}>{x}</th>
               ))}
@@ -166,6 +168,9 @@ export function TasksList({ tasks, date }: { tasks: Task[]; date: string }) {
                   {displayDate(t.deadline)}
                 </td>
                 <td>{t.owner || "—"}</td>
+                <td>
+                  <TaskActions task={t} />
+                </td>
               </tr>
             ))}
           </tbody>

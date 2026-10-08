@@ -12,7 +12,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Откройте http://localhost:3000. Без Sheets credentials в development и Vercel preview доступен небольшой demo dataset. При отсутствии APP_PASSWORD в этих средах разрешён bypass. В production доступ без APP_PASSWORD и SESSION_SECRET закрыт; build выводит предупреждение. Демо запрещено в production. Частичная конфигурация Sheets показывает ошибку.
+Откройте http://localhost:3000. Без Sheets credentials в development и Vercel preview доступен небольшой demo dataset. При отсутствии APP_PASSWORD или SESSION_SECRET доступ разрешён без login gate, в том числе в production. Если оба заданы, используется сохранённая signed-cookie авторизация. Демо запрещено в production. Частичная конфигурация Sheets показывает ошибку.
 
 ENV: GOOGLE_SERVICE_ACCOUNT_EMAIL, GOOGLE_PRIVATE_KEY, PERSONAL_OS_SPREADSHEET_ID, APP_PASSWORD, SESSION_SECRET (32+ символа), APP_TIMEZONE (IANA; fallback UTC). Полная инструкция: [Google setup](docs/GOOGLE_SETUP.md).
 
@@ -43,3 +43,7 @@ Signed httpOnly cookie: HMAC-SHA256, 7 дней, SameSite=Lax, Secure в product
 Будущий CRUD должен сохранять формульные колонки и выделять строки по ID, а не append. ID-утилиты подготовлены; конкурентные записи и повторная проверка ID — задача Phase 2.
 
 [Полная спецификация и Phase 1–4](docs/PRODUCT_SPEC.md) · [Правила разработки](AGENTS.md).
+
+## PHASE 2
+
+CRUD/forms и запись Факта реализованы через server-side Apps Script mutations. Инструкция ручного обновления существующего deployment: [docs/PHASE_2.md](docs/PHASE_2.md). Полный backend: [apps-script/Code.gs](apps-script/Code.gs). Без APP_PASSWORD или SESSION_SECRET login gate не блокирует приложение. Live create/update требуют нового deployment и отдельной проверки. PHASE 3 не начата.

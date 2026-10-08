@@ -1238,3 +1238,7 @@ PHASE 2
 Не возвращай мне план вместо работы.
 
 Выполни PHASE 1 полностью.
+
+## PHASE 2 — актуальная реализация
+
+Основной backend: Google Apps Script; source of truth: существующая Personal OS Sheet. Server Actions вызывают единый POST API snapshot/create/update; полный backend apps-script/Code.gs. Реализованы формы проектов, этапов, задач, процессов, плана и Факта; завершение/отмена задачи, деактивация процесса; Task/Process/Plan → Fact; revalidation всех зависимых экранов. Запись Факта не завершает задачу; фактическое время берётся только из Факт. Auth обходится при отсутствии APP_PASSWORD или SESSION_SECRET. PHASE 2 COMPLETE разрешён только после настоящих create/update; ручное обновление deployment описано в docs/PHASE_2.md. PHASE 3 не начинать.

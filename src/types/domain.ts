@@ -127,4 +127,10 @@ export interface Snapshot {
 export interface PersonalOsRepository {
   mode: "demo" | "google";
   read(): Promise<Snapshot>;
+  mutate?(request: {
+    action: "create" | "update";
+    entity: import("@/schemas/mutations").Entity;
+    id?: string;
+    data: import("@/schemas/mutations").WriteData;
+  }): Promise<{ id: string }>;
 }

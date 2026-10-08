@@ -1,3 +1,8 @@
+import {
+  MutationProvider,
+  CreateButton,
+  EditButton,
+} from "@/features/mutations";
 import { getSnapshot } from "@/repositories";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -24,11 +29,29 @@ export default async function ProjectDetail({
     )
     .slice(0, 10);
   return (
-    <>
+    <MutationProvider data={d} date={today()}>
       <Link href="/projects" className="back-link">
         ← Все проекты
       </Link>
       <PageHead title={p.name} subtitle={p.direction} mode={mode} />
+      <div className="mutation-toolbar">
+        <EditButton entity="project" row={p} label="Редактировать проект" />
+        <CreateButton
+          entity="milestone"
+          initial={{ projectId: id }}
+          label="+ Новый этап"
+        />
+        <CreateButton
+          entity="task"
+          initial={{ projectId: id }}
+          label="+ Новая задача"
+        />
+        <CreateButton
+          entity="activity"
+          initial={{ projectId: id }}
+          label="+ Записать факт"
+        />
+      </div>
       <div className="detail-status">
         <Badge>{p.status}</Badge>
         <Badge tone="purple">{p.priority}</Badge>
@@ -77,6 +100,7 @@ export default async function ProjectDetail({
                   {m.checkpoint}% · {m.status}
                 </Badge>
               </div>
+              <EditButton entity="milestone" row={m} />
               <p>{m.criteria}</p>
               <small>
                 План: {displayDate(m.plannedDate)} · Завершение:{" "}
@@ -104,6 +128,7 @@ export default async function ProjectDetail({
               <th>Время</th>
               <th>Тип</th>
               <th>Результат</th>
+              <th>Действия</th>
             </tr>
           </thead>
           <tbody>
@@ -118,12 +143,15 @@ export default async function ProjectDetail({
                   </Badge>
                 </td>
                 <td>{a.result || "—"}</td>
+                <td>
+                  <EditButton entity="activity" row={a} />
+                </td>
               </tr>
             ))}
           </tbody>
         </table>
         {!activities.length && <Empty text="Таймлог проекта пуст" />}
       </div>
-    </>
+    </MutationProvider>
   );
 }
