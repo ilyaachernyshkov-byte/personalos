@@ -13,6 +13,7 @@ import {
   editableData,
   elapsedMinutes,
   mutationSchema,
+  sheetOptions,
   planToFact,
   processToFact,
   taskToFact,
@@ -96,9 +97,9 @@ const dates = [
 ];
 const hidden = ["project", "process", "milestone", "lastDate"];
 const defaults: Partial<Record<Entity, WriteData>> = {
-  project: { status: "В работе", priority: "P2" },
+  project: { status: "Активен", priority: "P2" },
   milestone: { status: "В работе", order: 1, checkpoint: 0 },
-  task: { status: "Новая", priority: "P2", type: "Задача", plannedMinutes: 0 },
+  task: { status: "Inbox", priority: "P2", type: "Разовая", plannedMinutes: 0 },
   process: { active: true, plannedMinutes: 0, frequency: "Еженедельно" },
   plan: { status: "Запланировано", minutes: 0, type: "Задача" },
   activity: { minutes: 0, type: "Проектная работа" },
@@ -294,18 +295,7 @@ function MutationDialog({
             let options =
               field === "priority"
                 ? ["P1", "P2", "P3", "P4"]
-                : field === "status"
-                  ? editor.entity === "project"
-                    ? ["В работе", "Ожидание", "Завершено", "Отменено"]
-                    : [
-                        "Новая",
-                        "Запланировано",
-                        "В работе",
-                        "Ожидание",
-                        "Готово",
-                        "Отменено",
-                      ]
-                  : undefined;
+                : sheetOptions[editor.entity]?.[field];
             if (
               options &&
               values[field] &&

@@ -277,6 +277,58 @@ export function editableData(entity: Entity, row: object): WriteData {
     Object.entries(row).filter(([key]) => allowed.includes(key)),
   ) as WriteData;
 }
+export const sheetOptions: Partial<Record<Entity, Record<string, string[]>>> = {
+  project: { status: ["Активен", "Пауза", "Завершён", "Архив"] },
+  milestone: { status: ["Не начато", "В работе", "Готово", "Заблокировано"] },
+  task: {
+    status: [
+      "Inbox",
+      "Запланировано",
+      "В работе",
+      "Ожидание",
+      "Готово",
+      "Отменено",
+    ],
+    type: ["Проектная", "Разовая", "Операционка", "Процесс"],
+  },
+  process: {
+    frequency: [
+      "Ежедневно",
+      "По будням",
+      "Еженедельно",
+      "Ежемесячно",
+      "Произвольно",
+    ],
+  },
+  plan: {
+    status: [
+      "Запланировано",
+      "Выполнено",
+      "Частично",
+      "Отменено",
+      "Перенесено",
+      "Пропущено",
+    ],
+    type: ["Задача", "Встреча", "Процесс", "Фокус-блок", "Другое"],
+  },
+  activity: {
+    type: [
+      "Проектная работа",
+      "Встреча",
+      "Операционка",
+      "Процесс",
+      "Админ",
+      "Обучение",
+      "Другое",
+    ],
+  },
+};
+export function activityType(sourceType: string, projectId: string): string {
+  if (sheetOptions.activity!.type.includes(sourceType)) return sourceType;
+  if (["Проектная", "Проект", "Фокус-блок"].includes(sourceType))
+    return "Проектная работа";
+  return projectId ? "Проектная работа" : "Другое";
+}
 export function taskToFact(task: Task, date: string): WriteData {
   return {
     taskId: task.id,
@@ -284,7 +336,7 @@ export function taskToFact(task: Task, date: string): WriteData {
     processId: task.processId,
     name: task.name,
     date,
-    type: task.type,
+    type: activityType(task.type, task.projectId),
     minutes: 0,
   };
 }
@@ -294,7 +346,7 @@ export function planToFact(plan: PlanItem): WriteData {
     projectId: plan.projectId,
     name: plan.name,
     date: plan.date,
-    type: plan.type,
+    type: activityType(plan.type, plan.projectId),
     start: plan.start,
     end: plan.end,
     minutes: plan.minutes,
@@ -306,7 +358,7 @@ export function processToFact(process: Process, date: string): WriteData {
     projectId: process.projectId,
     name: process.name,
     date,
-    type: "Процессы",
+    type: "Процесс",
     start: process.time,
     minutes: process.plannedMinutes,
   };

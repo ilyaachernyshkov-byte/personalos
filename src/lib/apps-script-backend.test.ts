@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   entityConfig,
+  sheetOptions,
+  processToFact,
   editableData,
   validateMutation,
   taskToFact,
@@ -24,12 +26,28 @@ class Sheet {
   cells: unknown[][];
   formulas = new Map<string, string>();
   writes: [number, number, unknown][] = [];
+  validations = new Map<string, string[]>();
   constructor(config: Config) {
     this.cells = [
       config.headers,
       ...Array.from({ length: 5 }, () => Array(config.fields.length).fill("")),
     ];
+    const entity = Object.keys(entityConfig).find(
+      (key) =>
+        entityConfig[key as keyof typeof entityConfig].sheet === config.sheet,
+    )! as keyof typeof entityConfig;
     config.fields.forEach((field, col) => {
+      const allowed =
+        field === "source"
+          ? ["Ручной ввод", "ChatGPT", "Импорт"]
+          : field === "active"
+            ? ["Да", "Нет"]
+            : field
+              ? sheetOptions[entity]?.[field]
+              : undefined;
+      if (allowed)
+        for (let row = 2; row <= 6; row++)
+          this.validations.set(`${row}:${col + 1}`, allowed);
       if (!field)
         for (let row = 2; row <= 6; row++) {
           this.formulas.set(`${row}:${col + 1}`, "=FORMULA()");
@@ -46,6 +64,20 @@ class Sheet {
         this.cells
           .slice(row - 1, row - 1 + rows)
           .map((r) => r.slice(col - 1, col - 1 + cols)),
+      getDisplayValues: () =>
+        this.cells
+          .slice(row - 1, row - 1 + rows)
+          .map((r) => r.slice(col - 1, col - 1 + cols).map((v) => String(v))),
+      getDataValidation: () => {
+        const allowed = this.validations.get(`${row}:${col}`);
+        return allowed
+          ? {
+              getAllowInvalid: () => false,
+              getCriteriaType: () => "VALUE_IN_LIST",
+              getCriteriaValues: () => [allowed],
+            }
+          : null;
+      },
       getFormula: () => this.formulas.get(`${row}:${col}`) || "",
       setValue: (value: unknown) => {
         this.cells[row - 1][col - 1] = value;
@@ -58,6 +90,7 @@ class Sheet {
 function backend() {
   let locked = false;
   const scope = vm.createContext({
+    console: { error: vi.fn() },
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (key: string) =>
@@ -366,5 +399,139 @@ describe("mutation helpers", () => {
     ).toThrow();
     expect(elapsedMinutes("23:30", "00:15")).toBe(45);
     expect(elapsedMinutes("09:00", "10:30")).toBe(90);
+  });
+});
+
+it("adapts process booleans and source to real dropdowns; invalid dropdowns never cause partial writes", () => {
+  const { post, sheets } = backend();
+  expect(
+    post({
+      action: "create",
+      entity: "project",
+      data: { name: "X", status: "В работе" },
+    }),
+  ).toMatchObject({ ok: false, error: { code: "VALIDATION" } });
+  expect(sheets.project.writes).toHaveLength(0);
+  expect(
+    post({
+      action: "create",
+      entity: "process",
+      data: { name: "Process", active: true, frequency: "Еженедельно" },
+    }),
+  ).toMatchObject({ ok: true });
+  expect(sheets.process.cells[1][7]).toBe("Да");
+  expect(sheets.process.cells[1][12]).toBe("Ручной ввод");
+  expect(
+    post({
+      action: "update",
+      entity: "process",
+      id: "PROC-001",
+      data: { active: false },
+    }),
+  ).toMatchObject({ ok: true });
+  expect(sheets.process.cells[1][7]).toBe("Нет");
+});
+it("reports API version and safe failure stage, logging internal exceptions only server-side", () => {
+  const { scope, post } = backend();
+  scope.SpreadsheetApp = {
+    openById: () => ({
+      getSheetByName: () => ({
+        getRange: () => ({
+          getValues: () => {
+            throw new Error("Internal failure");
+          },
+        }),
+      }),
+      getSpreadsheetTimeZone: () => {
+        throw new Error("Internal failure");
+      },
+    }),
+  };
+  const result = post({ action: "snapshot" });
+  expect(result).toMatchObject({
+    ok: false,
+    apiVersion: 2,
+    error: { code: "BACKEND_ERROR", stage: "snapshot:project:sheet" },
+  });
+  expect(JSON.stringify(result)).not.toContain("Internal failure");
+  expect(JSON.stringify(result)).not.toContain("test-secret");
+  expect(scope.console.error).toHaveBeenCalledOnce();
+});
+it("prefills supported native activity types for task, plan and process", async () => {
+  const snapshot = await demoRepository.read();
+  const allowed = sheetOptions.activity!.type;
+  expect(allowed).toContain(taskToFact(snapshot.tasks[0], "2026-10-07").type);
+  expect(allowed).toContain(planToFact(snapshot.plans[0]).type);
+  expect(processToFact(snapshot.processes[0], "2026-10-07").type).toBe(
+    "Процесс",
+  );
+});
+
+it("always passes a nonempty string timezone to Apps Script date formatting", () => {
+  const { scope } = backend();
+  expect(
+    scope.getSafeTimeZone({ getSpreadsheetTimeZone: () => " Etc/GMT " }),
+  ).toBe("Etc/GMT");
+  scope.Session = { getScriptTimeZone: () => "Europe/Saratov" };
+  for (const value of [undefined, null, 0, {}, ""])
+    expect(scope.getSafeTimeZone({ getSpreadsheetTimeZone: () => value })).toBe(
+      "Europe/Saratov",
+    );
+  scope.Session = { getScriptTimeZone: () => null };
+  expect(scope.getSafeTimeZone({ getSpreadsheetTimeZone: () => null })).toBe(
+    "UTC",
+  );
+  expect(
+    scope.getSafeTimeZone({
+      getSpreadsheetTimeZone: () => {
+        throw new Error("Unavailable");
+      },
+    }),
+  ).toBe("UTC");
+});
+
+it("uses displayed Sheet time instead of 1899 Date timezone offsets and preserves gap row indexing", () => {
+  const { scope, sheets, post } = backend();
+  // Model the exact live mismatch: value Date would format as 12:34, displayed cell is 09:30.
+  scope.shiftedTime = vm.runInContext(
+    "new Date('1899-12-30T12:34:00Z')",
+    scope,
+  );
+  const cell = scope.shiftedTime;
+  expect(scope.serializeCell(cell, "09:30", "UTC", true)).toBe("09:30");
+  expect(scope.serializeCell(cell, "9:30:00", "Europe/Saratov", true)).toBe(
+    "09:30",
+  );
+  const range = sheets.plan.getRange.bind(sheets.plan);
+  sheets.plan.cells[3][0] = "PLAN-001";
+  sheets.plan.cells[3][1] = vm.runInContext(
+    "new Date('2026-10-07T20:00:00Z')",
+    scope,
+  );
+  sheets.plan.cells[3][2] = sheets.plan.cells[3][3] = cell;
+  sheets.plan.getRange = (...args: Parameters<Sheet["getRange"]>) => {
+    const result = range(...args);
+    return {
+      ...result,
+      getDisplayValues: () =>
+        result
+          .getDisplayValues()
+          .map((row, i) =>
+            row.map((value, j) =>
+              args[0] + i === 4 && args[1] + j === 2
+                ? "08.10.2026"
+                : args[0] + i === 4 && [3, 4].includes(args[1] + j)
+                  ? "09:30"
+                  : value,
+            ),
+          ),
+    };
+  };
+  const snapshot = parseAppsScriptSnapshot(post({ action: "snapshot" }));
+  expect(snapshot.plans[0]).toMatchObject({
+    id: "PLAN-001",
+    date: "2026-10-08",
+    start: "09:30",
+    end: "09:30",
   });
 });

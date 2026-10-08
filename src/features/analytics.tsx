@@ -32,8 +32,12 @@ export function Analytics({ data, today }: { data: Snapshot; today: string }) {
           ? today.slice(0, 8) + "01"
           : shiftDate(today, period === "30 дней" ? -29 : -6);
   const a = aggregate(data.plans, data.activities, from, today);
-  const type = (name: string) =>
-    minutes(a.types.find((t) => t.name === name)?.value || 0);
+  const type = (...names: string[]) =>
+    minutes(
+      a.types
+        .filter((t) => names.includes(t.name))
+        .reduce((sum, t) => sum + t.value, 0),
+    );
   const split = [
     { name: "Плановая", value: a.fact - a.unplanned },
     { name: "Внеплановая", value: a.unplanned },
@@ -123,9 +127,9 @@ export function Analytics({ data, today }: { data: Snapshot; today: string }) {
           ["Выполнение плана", `${Math.round(a.completion)}%`],
           ["Внеплановое время", `${Math.round(a.unplannedPercent)}%`],
           ["Проектная работа", type("Проектная работа")],
-          ["Встречи", type("Встречи")],
+          ["Встречи", type("Встреча", "Встречи")],
           ["Операционка", type("Операционка")],
-          ["Процессы", type("Процессы")],
+          ["Процессы", type("Процесс", "Процессы")],
         ]}
       />
       <div className="charts-grid">
