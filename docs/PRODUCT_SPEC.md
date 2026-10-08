@@ -1242,3 +1242,7 @@ PHASE 2
 ## PHASE 2 — актуальная реализация
 
 Основной backend: Google Apps Script; source of truth: существующая Personal OS Sheet. Server Actions вызывают единый POST API snapshot/create/update; полный backend apps-script/Code.gs. Реализованы формы проектов, этапов, задач, процессов, плана и Факта; завершение/отмена задачи, деактивация процесса; Task/Process/Plan → Fact; revalidation всех зависимых экранов. Запись Факта не завершает задачу; фактическое время берётся только из Факт. Auth обходится при отсутствии APP_PASSWORD или SESSION_SECRET. PHASE 2 COMPLETE разрешён только после настоящих create/update; ручное обновление deployment описано в docs/PHASE_2.md. PHASE 3 не начинать.
+
+## PHASE 3 implementation contract
+
+Ручная Google Calendar → План синхронизация через Apps Script API v2; только явно выбранные server ENV calendars, OAuth calendar.readonly, pair dedup calendar_id + event instance ID, сохранение ручных связей и формул. Calendar Event никогда не создаёт Факт. Cancellation сохраняет историю. All-day: одна строка на дату старта, пустое время, 0 минут. Timed multi-day: одна строка с полной длительностью. Настройка и ограничения: [PHASE_3.md](PHASE_3.md). Код подготовлен; live verification обязательна до COMPLETE. PHASE 4 не начата.

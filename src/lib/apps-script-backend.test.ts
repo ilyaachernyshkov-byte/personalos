@@ -89,12 +89,13 @@ class Sheet {
 }
 function backend() {
   let locked = false;
+  const properties: Record<string, string> = { API_SECRET: "test-secret", SPREADSHEET_ID: "book" };
   const scope = vm.createContext({
     console: { error: vi.fn() },
     PropertiesService: {
       getScriptProperties: () => ({
-        getProperty: (key: string) =>
-          ({ API_SECRET: "test-secret", SPREADSHEET_ID: "book" })[key],
+        getProperty: (key: string) => properties[key],
+        setProperty: (key: string, value: string) => { properties[key] = value; },
       }),
     },
     ContentService: {
@@ -534,4 +535,129 @@ it("uses displayed Sheet time instead of 1899 Date timezone offsets and preserve
     start: "09:30",
     end: "09:30",
   });
+});
+
+type TestCalendarEvent = { id: string; status?: string; summary?: string; start?: {dateTime?: string; date?: string}; end?: {dateTime?: string; date?: string} };
+function calendarBackend() {
+  const b = backend();
+  b.scope.Utilities = { formatDate(date: Date, timeZone: string, format: string) {
+    const parts = new Intl.DateTimeFormat("en-GB", { timeZone, year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).formatToParts(date);
+    const get = (type: string) => parts.find(p => p.type === type)!.value;
+    if (format === "HH:mm") return `${get("hour")}:${get("minute")}`;
+    const day = `${get("year")}-${get("month")}-${get("day")}`;
+    return format === "yyyy-MM-dd" ? day : `${day} ${get("hour")}:${get("minute")}:${get("second")}`;
+  } };
+  b.scope.ScriptApp = { getOAuthToken: () => "test-owner-token" };
+  const calendars: Record<string, TestCalendarEvent[]> = { a: [] };
+  const gets = new Map<string, TestCalendarEvent | number>();
+  let pagination = false;
+  const fetch = vi.fn((url: string, options: {method: string}) => {
+    expect(options.method).toBe("get");
+    const u = new URL(url);
+    const path = u.pathname.split("/").map(decodeURIComponent);
+    const id = path[4], eventId = path[6];
+    let status = 200, data: unknown;
+    if (eventId) {
+      const found = gets.get(`${id}:${eventId}`) ?? calendars[id]?.find(e => e.id === eventId);
+      if (typeof found === "number") status = found;
+      else if (found) data = found;
+      else status = 404;
+    } else if (!(id in calendars)) status = 403;
+    else {
+      expect(u.searchParams.get("singleEvents")).toBe("true");
+      expect(u.searchParams.get("showDeleted")).toBe("true");
+      expect(u.searchParams.get("timeZone")).toBe("Europe/Saratov");
+      expect(u.searchParams.get("timeMin")).toMatch(/Z$/);
+      data = pagination && !u.searchParams.has("pageToken") ? {items: calendars[id].slice(0, 1), nextPageToken: "page2"} : {items: pagination ? calendars[id].slice(1) : calendars[id]};
+    }
+    return { getResponseCode: () => status, getContentText: () => JSON.stringify(data || {}) };
+  });
+  b.scope.UrlFetchApp = { fetch };
+  return {...b, calendars, gets, fetch, paginate: () => {pagination = true;}, sync: (ids = ["a"]) => b.post({action: "calendarSync", calendarIds: ids, pastDays: 7, futureDays: 30})};
+}
+const timed = (id = "event-1"): TestCalendarEvent => ({id, summary: "Meeting", start: {dateTime: "2026-10-08T10:30:00+04:00"}, end: {dateTime: "2026-10-08T11:45:00+04:00"}});
+describe("Calendar read-only integration", () => {
+  it("maps timed event through Sheet and snapshot without HH:mm shift; no Fact or formula writes", () => {
+    const b = calendarBackend(); b.calendars.a = [timed()];
+    const formulas = [...b.sheets.plan.formulas];
+    expect(b.sync()).toMatchObject({ok: true, result: {created: 1, updated: 0, canceled: 0, skipped: 0}});
+    const snapshot = parseAppsScriptSnapshot(b.post({action: "snapshot"}));
+    expect(snapshot.plans[0]).toMatchObject({id: "PLAN-001", date: "2026-10-08", start: "10:30", end: "11:45", minutes: 75, source: "Импорт", calendarId: "a", calendarEventId: "event-1"});
+    expect(snapshot.activities).toEqual([]);
+    expect(b.sheets.activity.writes).toEqual([]);
+    expect([...b.sheets.plan.formulas]).toEqual(formulas);
+    expect(b.sheets.plan.writes.some(([,col]) => col === 12 || col === 13)).toBe(false);
+    expect(b.post({action: "calendarStatus"})).toMatchObject({ok: true, lastSuccess: expect.stringMatching(/Z$/)});
+  });
+  it("dedups repeat sync and preserves PLAN ID, manual project/sourceId/notes/type on updates", () => {
+    const b = calendarBackend(); b.calendars.a = [timed()]; b.sync();
+    const row = b.sheets.plan.cells[1]; row[6] = "TSK-999"; row[8] = "PRJ-999"; row[9] = "Manual project"; row[16] = "Manual notes"; row[5] = "Фокус-блок";
+    expect(b.sync()).toMatchObject({result: {created: 0, skipped: 1}});
+    b.calendars.a = [{...timed(), summary: "Renamed", start: {dateTime: "2026-10-09T12:00:00+04:00"}, end: {dateTime: "2026-10-09T13:00:00+04:00"}}];
+    expect(b.sync()).toMatchObject({result: {created: 0, updated: 1}});
+    expect(row[0]).toBe("PLAN-001"); expect(row[7]).toBe("Renamed");
+    expect([row[6], row[8], row[9], row[16], row[5]]).toEqual(["TSK-999", "PRJ-999", "Manual project", "Manual notes", "Фокус-блок"]);
+    expect(b.sheets.plan.cells.filter(r => String(r[0]).startsWith("PLAN-")).length).toBe(1);
+  });
+  it("cancels tombstones without deleting row, IDs, event detail or creating Fact", () => {
+    const b = calendarBackend(); b.calendars.a = [timed()]; b.sync();
+    b.calendars.a = [{id: "event-1", status: "cancelled"}, {id: "never-imported", status: "cancelled"}];
+    expect(b.sync()).toMatchObject({result: {canceled: 1, skipped: 1}});
+    expect(b.sheets.plan.cells[1]).toMatchObject({0: "PLAN-001", 7: "Meeting", 10: "Отменено", 14: "a", 15: "event-1"});
+    expect(b.sync()).toMatchObject({result: {canceled: 0, skipped: 2}});
+    expect(b.sheets.activity.writes).toEqual([]);
+  });
+  it("verifies missing event: 410 cancels, a moved event updates instead of cancellation", () => {
+    const b = calendarBackend(); b.calendars.a = [timed()]; b.sync(); b.calendars.a = [];
+    b.gets.set("a:event-1", {...timed(), start: {dateTime: "2027-01-01T10:00:00+04:00"}, end: {dateTime: "2027-01-01T11:00:00+04:00"}});
+    expect(b.sync()).toMatchObject({result: {updated: 1, canceled: 0}});
+    b.gets.set("a:event-1", 410);
+    expect(b.sync()).toMatchObject({result: {canceled: 1}});
+  });
+  it("maps all-day multi-day to one zero-minute Plan", () => {
+    const b = calendarBackend(); b.calendars.a = [{id: "all-day", start: {date: "2026-10-08"}, end: {date: "2026-10-12"}}];
+    expect(b.sync()).toMatchObject({result: {created: 1}});
+    expect(b.sheets.plan.cells[1].slice(2, 5)).toEqual(["", "", 0]);
+  });
+  it("paginates recurring instance IDs and dedups by calendar+instance", () => {
+    const b = calendarBackend(); b.calendars.a = [timed("series_20261008T063000Z"), timed("series_20261009T063000Z")]; b.calendars.b = [timed("series_20261008T063000Z")]; b.paginate();
+    expect(b.sync(["a", "b"])).toMatchObject({result: {created: 3}});
+    expect(b.sync(["a", "b"])).toMatchObject({result: {created: 0, skipped: 3}});
+    expect(b.fetch).toHaveBeenCalledTimes(8);
+  });
+  it("converts RFC3339 offsets into spreadsheet date/time across midnight and DST", () => {
+    const b = calendarBackend(); b.calendars.a = [{...timed(), start: {dateTime: "2026-03-29T23:30:00-04:00"}, end: {dateTime: "2026-03-30T00:30:00-04:00"}}]; b.sync();
+    const plan = parseAppsScriptSnapshot(b.post({action: "snapshot"})).plans[0];
+    expect(plan).toMatchObject({date: "2026-03-30", start: "07:30", end: "08:30", minutes: 60});
+  });
+  it("reads actual dropdown rules and refuses cancellation status without changing the row", () => {
+    const b = calendarBackend(); b.calendars.a = [timed()]; b.sheets.plan.validations.set("2:6", ["Другое"]); b.sync();
+    expect(b.sheets.plan.cells[1][5]).toBe("Другое");
+    b.sheets.plan.validations.set("2:11", ["Запланировано"]); b.calendars.a = [{id: "event-1", status: "cancelled"}];
+    const before = b.sheets.plan.writes.length;
+    expect(b.sync()).toMatchObject({ok: false, error: {code: "VALIDATION"}});
+    expect(b.sheets.plan.writes.length).toBe(before);
+  });
+  it("access failure on a selected calendar makes no writes or false cancellations", () => {
+    const b = calendarBackend(); b.calendars.a = [timed()];
+    expect(b.sync(["a", "forbidden"])).toMatchObject({ok: false, error: {code: "CALENDAR_ACCESS"}});
+    expect(b.sheets.plan.writes).toEqual([]);
+    expect(b.sheets.activity.writes).toEqual([]);
+  });
+  it("Calendar Plan still supports existing Plan → Fact mutation", () => {
+    const b = calendarBackend(); b.calendars.a = [timed()]; b.sync();
+    const plan = parseAppsScriptSnapshot(b.post({action: "snapshot"})).plans[0];
+    expect(b.post({action: "create", entity: "activity", data: planToFact(plan)})).toMatchObject({ok: true, id: "ACT-001"});
+    const snapshot = parseAppsScriptSnapshot(b.post({action: "snapshot"}));
+    expect(snapshot.activities[0]).toMatchObject({planId: "PLAN-001", start: "10:30", end: "11:45"});
+  });
+});
+
+it("manifest grants Calendar readonly only and mapping rejects offset-free times", () => {
+  const manifest = JSON.parse(readFileSync("apps-script/appsscript.json", "utf8"));
+  expect(manifest.oauthScopes.filter((scope: string) => scope.includes("/calendar"))).toEqual(["https://www.googleapis.com/auth/calendar.readonly"]);
+  const b = calendarBackend();
+  b.calendars.a = [{...timed(), start: {dateTime: "2026-10-08T10:30:00"}}];
+  expect(b.sync()).toMatchObject({ok: false, error: {code: "CALENDAR_DATA"}});
+  expect(b.sheets.plan.writes).toEqual([]);
 });
