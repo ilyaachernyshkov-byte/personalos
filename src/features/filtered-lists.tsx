@@ -102,6 +102,7 @@ export function TasksList({ tasks, date }: { tasks: Task[]; date: string }) {
           <button
             key={q}
             className={q === quick ? "selected" : ""}
+            aria-pressed={q === quick}
             onClick={() => setQuick(q)}
           >
             {q}
@@ -119,7 +120,7 @@ export function TasksList({ tasks, date }: { tasks: Task[]; date: string }) {
           />
         ))}
       </div>
-      <div className="panel table-wrap">
+      <div className="panel table-wrap" tabIndex={0}>
         <table>
           <thead>
             <tr>

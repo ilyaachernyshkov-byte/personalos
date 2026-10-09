@@ -1,15 +1,10 @@
 "use client";
 import Link from "next/link";
+import { useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard,
-  FolderKanban,
-  ListTodo,
-  Repeat2,
-  CalendarDays,
-  ChartNoAxesCombined,
-  Settings,
-  LogOut,
+  LayoutDashboard, FolderKanban, ListTodo, Repeat2,
+  CalendarDays, ChartNoAxesCombined, Settings, LogOut,
 } from "lucide-react";
 import { logout } from "@/app/login/actions";
 const links = [
@@ -22,58 +17,44 @@ const links = [
 ] as const;
 export function Sidebar() {
   const path = usePathname();
+  const settingsActive = path === "/settings";
+  const navRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (!window.matchMedia("(max-width: 767px)").matches) return;
+    const nav = navRef.current;
+    const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (nav && active) {
+      nav.scrollLeft = Math.max(0, active.offsetLeft - nav.offsetLeft - (nav.clientWidth - active.clientWidth) / 2);
+    }
+  }, [path]);
   return (
     <aside className="sidebar">
-      <Link href="/" className="brand">
-        <span className="brand-mark">P</span>
-        <span>
-          PERSONAL OS<small>Рабочее пространство</small>
-        </span>
+      <Link href="/" className="brand" aria-label="Personal OS — Дашборд">
+        <span className="brand-mark" aria-hidden="true">P</span>
       </Link>
-      <div className="nav-label">УПРАВЛЕНИЕ</div>
-      <nav>
-        {links.map(([href, label, Icon]) => (
-          <Link
-            key={href}
-            href={href}
-            className={
-              (href === "/" ? path === "/" : path.startsWith(href))
-                ? "active"
-                : ""
-            }
-          >
-            <Icon size={18} />
-            {label}
-          </Link>
-        ))}
-        <Link className="mobile-only" href="/settings">
-          <Settings size={16} />
-          Настройки
+      <nav ref={navRef} aria-label="Основная навигация">
+        {links.map(([href, label, Icon]) => {
+          const active = href === "/" ? path === "/" : path.startsWith(href);
+          return <Link key={href} href={href} className={`nav-link ${active ? "active" : ""}`} aria-label={label} aria-current={active ? "page" : undefined}>
+            <Icon size={18} aria-hidden="true" />
+            <span className="nav-tooltip" aria-hidden="true">{label}</span>
+          </Link>;
+        })}
+        <Link className={`nav-link mobile-only ${settingsActive ? "active" : ""}`} href="/settings" aria-label="Настройки" aria-current={settingsActive ? "page" : undefined}>
+          <Settings size={18} aria-hidden="true" /><span className="nav-tooltip" aria-hidden="true">Настройки</span>
         </Link>
         <form className="mobile-only" action={logout}>
-          <button className="logout">
-            <LogOut size={16} />
-            Выйти
-          </button>
+          <button className="logout" aria-label="Выйти"><LogOut size={18} aria-hidden="true" /><span className="nav-tooltip" aria-hidden="true">Выйти</span></button>
         </form>
       </nav>
       <div className="sidebar-bottom">
-        <Link href="/settings">
-          <Settings size={18} />
-          Настройки
+        <Link href="/settings" className={`nav-link ${settingsActive ? "active" : ""}`} aria-label="Настройки" aria-current={settingsActive ? "page" : undefined}>
+          <Settings size={18} aria-hidden="true" /><span className="nav-tooltip" aria-hidden="true">Настройки</span>
         </Link>
         <form action={logout}>
-          <button className="logout">
-            <LogOut size={17} />
-            Выйти
-          </button>
+          <button className="logout" aria-label="Выйти"><LogOut size={18} aria-hidden="true" /><span className="nav-tooltip" aria-hidden="true">Выйти</span></button>
         </form>
-        <div className="profile">
-          <span>Я</span>
-          <div>
-            Личное пространство<small>Один пользователь</small>
-          </div>
-        </div>
+        <div className="profile" title="Личное пространство">Я</div>
       </div>
     </aside>
   );

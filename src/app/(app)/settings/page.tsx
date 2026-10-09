@@ -39,6 +39,7 @@ export default async function Settings() {
         subtitle="Подключение и защита личного пространства"
       />
       <section className="panel">
+        <h2>Подключение и доступ</h2>
         <dl className="detail-fields">
           <div>
             <dt>Основное подключение</dt>
