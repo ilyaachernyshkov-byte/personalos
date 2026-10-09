@@ -7,7 +7,7 @@ export default function ErrorPage({
   reset: () => void;
 }) {
   return (
-    <section className="panel">
+    <section className="panel state-page">
       <h1>Не удалось загрузить данные</h1>
       <p>
         Проверьте подключение Google Sheets, ENV и доступ Service Account. Если

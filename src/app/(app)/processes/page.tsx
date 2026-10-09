@@ -19,7 +19,7 @@ export default async function Processes() {
       <div className="mutation-toolbar">
         <CreateButton entity="process" label="+ Новый процесс" />
       </div>
-      <div className="panel table-wrap">
+      <div className="panel table-wrap" tabIndex={0}>
         <table>
           <thead>
             <tr>
@@ -44,14 +44,19 @@ export default async function Processes() {
               <tr key={p.id}>
                 <td>
                   <strong>{p.name}</strong>
-                  <small>{p.notes}</small>
+                  {p.notes && (
+                    <details className="row-notes">
+                      <summary>Заметки</summary>
+                      <p>{p.notes}</p>
+                    </details>
+                  )}
                 </td>
                 <td>{p.category}</td>
-                <td>{p.frequency}</td>
+                <td><Badge>{p.frequency}</Badge></td>
                 <td>{p.rule}</td>
                 <td>{p.time || "—"}</td>
                 <td>{p.plannedMinutes}</td>
-                <td>{displayDate(p.nextDate)}</td>
+                <td className="time-cell">{displayDate(p.nextDate)}</td>
                 <td>{displayDate(p.lastDate)}</td>
                 <td>
                   <Badge tone={p.active ? "green" : "neutral"}>
