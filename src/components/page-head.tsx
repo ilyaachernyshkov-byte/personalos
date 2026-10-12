@@ -11,7 +11,7 @@ export function PageHead({
     <>
       <div className="page-head">
         <div>
-          <div className="eyebrow">PERSONAL WORKSPACE</div>
+          <div className="eyebrow">Рабочее пространство</div>
           <h1>{title}</h1>
           <p>{subtitle}</p>
         </div>

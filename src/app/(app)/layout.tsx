@@ -9,16 +9,17 @@ export default async function AppLayout({
   await requireAuth();
   return (
     <div className="app-shell">
+      <a href="#main-content" className="skip-link">Перейти к содержимому</a>
       <Sidebar />
       <div className="workspace">
         <header className="topbar">
-          <span>Личная система управления</span>
+          <span className="topbar-brand">Personal OS<small>Личная система управления</small></span>
           <span className="topbar-user">
             <span className="dot" />
             Ваш рабочий день
           </span>
         </header>
-        <main>{children}</main>
+        <main id="main-content" tabIndex={-1}>{children}</main>
       </div>
     </div>
   );

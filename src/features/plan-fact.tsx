@@ -1,6 +1,7 @@
 "use client";
 import { CreateButton, EditButton, PlanActions } from "@/features/mutations";
 import { useState } from "react";
+import { CornerDownRight } from "lucide-react";
 import type { Snapshot } from "@/types/domain";
 import { shiftDate, isIsoDate, minutes } from "@/lib/dates";
 import { aggregate } from "@/lib/analytics";
@@ -139,10 +140,10 @@ export function PlanFact({ data, today }: { data: Snapshot; today: string }) {
                   </div>
                   {x.planId && (
                     <button
-                      className="text-button"
+                      className="text-button linked-plan"
                       onClick={() => setSelected(x.planId)}
                     >
-                      ↳{" "}
+                      <CornerDownRight size={14} aria-hidden="true" />
                       {data.plans.find((p) => p.id === x.planId)?.name ||
                         x.planId}
                     </button>

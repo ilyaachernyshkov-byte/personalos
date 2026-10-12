@@ -17,7 +17,8 @@ import type { Snapshot } from "@/types/domain";
 import { aggregate } from "@/lib/analytics";
 import { shiftDate, dateToSerial, displayDate, minutes } from "@/lib/dates";
 import { Kpis, Empty } from "@/components/shared";
-const COLORS = ["#7563cf", "#53a99c", "#e7b862", "#90a3b5", "#cf7c8b"];
+import { chartTheme } from "@/components/chart-theme";
+const COLORS = chartTheme.palette;
 export function Analytics({ data, today }: { data: Snapshot; today: string }) {
   const [period, setPeriod] = useState("7 дней");
   const weekday = new Date(
@@ -69,7 +70,7 @@ export function Analytics({ data, today }: { data: Snapshot; today: string }) {
                       <Cell key={i} fill={COLORS[i % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(v) => `${v} мин`} />
+                  <Tooltip contentStyle={chartTheme.tooltip} formatter={(v) => `${v} мин`} />
                   <Legend />
                 </PieChart>
               ) : (
@@ -78,20 +79,22 @@ export function Analytics({ data, today }: { data: Snapshot; today: string }) {
                   layout="vertical"
                   margin={{ left: 10, right: 20 }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" />
+                  <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" tick={chartTheme.tick} axisLine={false} tickLine={false} />
                   <YAxis
                     type="category"
                     dataKey="name"
                     width={150}
-                    tick={{ fontSize: 11 }}
+                    tick={chartTheme.tick}
+                    axisLine={false}
+                    tickLine={false}
                   />
-                  <Tooltip formatter={(v) => `${v} мин`} />
+                  <Tooltip contentStyle={chartTheme.tooltip} formatter={(v) => `${v} мин`} />
                   <Bar
                     isAnimationActive={false}
                     dataKey="value"
                     name="Факт, мин"
-                    fill="#7563cf"
+                    fill={chartTheme.primary}
                     radius={[0, 4, 4, 0]}
                   />
                 </BarChart>
@@ -110,6 +113,7 @@ export function Analytics({ data, today }: { data: Snapshot; today: string }) {
             <button
               key={p}
               className={period === p ? "selected" : ""}
+              aria-pressed={period === p}
               onClick={() => setPeriod(p)}
             >
               {p}
@@ -138,14 +142,17 @@ export function Analytics({ data, today }: { data: Snapshot; today: string }) {
           <div className="chart">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={a.days}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <CartesianGrid stroke={chartTheme.grid} strokeDasharray="3 3" vertical={false} />
                 <XAxis
                   dataKey="date"
                   tickFormatter={(v) => displayDate(v).slice(0, 5)}
-                  tick={{ fontSize: 11 }}
+                  tick={chartTheme.tick}
+                  axisLine={false}
+                  tickLine={false}
                 />
-                <YAxis />
+                <YAxis tick={chartTheme.tick} axisLine={false} tickLine={false} />
                 <Tooltip
+                  contentStyle={chartTheme.tooltip}
                   labelFormatter={(v) => displayDate(String(v))}
                   formatter={(v) => `${v} мин`}
                 />
@@ -154,14 +161,14 @@ export function Analytics({ data, today }: { data: Snapshot; today: string }) {
                   isAnimationActive={false}
                   dataKey="plan"
                   name="План"
-                  fill="#d7d0f0"
+                  fill={chartTheme.secondary}
                   radius={[3, 3, 0, 0]}
                 />
                 <Bar
                   isAnimationActive={false}
                   dataKey="fact"
                   name="Факт"
-                  fill="#7563cf"
+                  fill={chartTheme.primary}
                   radius={[3, 3, 0, 0]}
                 />
               </BarChart>
@@ -176,7 +183,7 @@ export function Analytics({ data, today }: { data: Snapshot; today: string }) {
         {breakdown("Время по типам активности", a.types, true)}
       </div>
       <h2>Дневная сводка</h2>
-      <div className="panel table-wrap">
+      <div className="panel table-wrap" tabIndex={0}>
         <table>
           <thead>
             <tr>

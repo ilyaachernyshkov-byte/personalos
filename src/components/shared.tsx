@@ -30,15 +30,26 @@ export function Health({ value }: { value: string }) {
     </Badge>
   );
 }
+export function MetricCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="kpi">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
 export function Kpis({ items }: { items: [string, string | number][] }) {
   return (
-    <div className="kpis">
-      {items.map(([label, value]) => (
-        <div className="kpi" key={label}>
-          <span>{label}</span>
-          <strong>{value}</strong>
-        </div>
-      ))}
+    <div className={items.length > 6 ? "kpis kpis-many" : "kpis"}>
+      {items.map(([label, value]) => <MetricCard key={label} label={label} value={value} />)}
+    </div>
+  );
+}
+export function ProgressBar({ value, label = "Прогресс проекта" }: { value: number; label?: string }) {
+  const progress = Math.min(100, Math.max(0, value));
+  return (
+    <div className="progress" role="progressbar" aria-label={label} aria-valuenow={progress} aria-valuemin={0} aria-valuemax={100}>
+      <span style={{ width: `${progress}%` }} />
     </div>
   );
 }
@@ -65,9 +76,7 @@ export function ProjectCard({ project: p }: { project: Project }) {
         <span>{p.status}</span>
         <strong>{p.progress}%</strong>
       </div>
-      <div className="progress">
-        <span style={{ width: `${Math.min(100, Math.max(0, p.progress))}%` }} />
-      </div>
+      <ProgressBar value={p.progress} />
       <dl>
         <div>
           <dt>Текущая точка</dt>

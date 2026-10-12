@@ -7,7 +7,7 @@ import { getSnapshot } from "@/repositories";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { PageHead } from "@/components/page-head";
-import { Badge, Health, Empty, Kpis } from "@/components/shared";
+import { Badge, Health, Empty, Kpis, ProgressBar } from "@/components/shared";
 import { TasksList } from "@/features/filtered-lists";
 import { displayDate, today, minutes } from "@/lib/dates";
 export default async function ProjectDetail({
@@ -66,11 +66,7 @@ export default async function ProjectDetail({
         ]}
       />
       <div className="panel">
-        <div className="progress">
-          <span
-            style={{ width: `${Math.min(100, Math.max(0, p.progress))}%` }}
-          />
-        </div>
+        <ProgressBar value={p.progress} />
         <dl className="detail-fields">
           {[
             ["Текущая точка", p.current],
@@ -119,7 +115,7 @@ export default async function ProjectDetail({
         date={today()}
       />
       <h2>Последние записи Факта</h2>
-      <div className="panel table-wrap">
+      <div className="panel table-wrap" tabIndex={0}>
         <table>
           <thead>
             <tr>

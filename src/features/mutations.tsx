@@ -8,6 +8,7 @@ import {
   useTransition,
   type ReactNode,
 } from "react";
+import { ActionMenu } from "@/components/action-menu";
 import type { Snapshot, Task, PlanItem, Process } from "@/types/domain";
 import {
   editableData,
@@ -481,7 +482,7 @@ export function EditButton({
 export function TaskActions({ task }: { task: Task }) {
   const { open, date } = useMutations();
   return (
-    <div className="row-actions">
+    <ActionMenu label={`Действия задачи «${task.name}»`}>
       <EditButton entity="task" row={task} />
       <Button
         size="sm"
@@ -536,7 +537,7 @@ export function TaskActions({ task }: { task: Task }) {
           </Button>
         </>
       )}
-    </div>
+    </ActionMenu>
   );
 }
 export function PlanActions({ plan }: { plan: PlanItem }) {
@@ -563,7 +564,7 @@ export function PlanActions({ plan }: { plan: PlanItem }) {
 export function ProcessActions({ process }: { process: Process }) {
   const { open, date } = useMutations();
   return (
-    <div className="row-actions">
+    <ActionMenu label={`Действия процесса «${process.name}»`}>
       <EditButton entity="process" row={process} />
       <Button
         size="sm"
@@ -596,6 +597,6 @@ export function ProcessActions({ process }: { process: Process }) {
       >
         Записать выполнение
       </Button>
-    </div>
+    </ActionMenu>
   );
 }
